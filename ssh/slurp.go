@@ -30,6 +30,12 @@ func Slurp(c net.Conn, config *ClientConfig) ([]byte, error) {
 	return conn.slurpHostKey()
 }
 
+var SlurpAlgos = []string{KeyAlgoRSA, KeyAlgoDSA, KeyAlgoECDSA256, KeyAlgoECDSA384, KeyAlgoECDSA521}
+
+func SetSlurpAlgo(algo string) {
+	supportedHostKeyAlgos = []string{algo}
+}
+
 // SlurpHostKey acts like its going to handshake, but it just plays along long enough to get the host key.
 func (c *ClientConn) slurpHostKey() ([]byte, error) {
 	var magics handshakeMagics
@@ -124,9 +130,12 @@ func ParseHostKey(buf []byte) (*SlurpedHostKey, error) {
 	return &SlurpedHostKey{key}, nil
 }
 
+func (pk *SlurpedHostKey) KeyString() string {
+	return base64.StdEncoding.EncodeToString(serializePublickey(pk.Key))
+}
+
 func (pk *SlurpedHostKey) String() string {
-	armor := base64.StdEncoding.EncodeToString(serializePublickey(pk.Key))
-	return fmt.Sprintf("%s %s", algoName(pk.Key), armor)
+	return fmt.Sprintf("%s %s", algoName(pk.Key), pk.KeyString())
 }
 
 func (pk *SlurpedHostKey) Fingerprint() string {
