@@ -1,10 +1,13 @@
-
 package ssh
 
 import (
+	"bytes"
 	"crypto"
+	"crypto/md5"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 )
 
@@ -105,4 +108,37 @@ func (c *ClientConn) slurpHostKey() ([]byte, error) {
 	}
 
 	return hostKey, err
+}
+
+type SlurpedHostKey struct {
+	Key interface{}
+}
+
+var HostKeyParseErr error = errors.New("Parse error on host key")
+
+func ParseHostKey(buf []byte) (*SlurpedHostKey, error) {
+	key, _, ok := parsePubKey(buf)
+	if !ok {
+		return nil, HostKeyParseErr
+	}
+	return &SlurpedHostKey{key}, nil
+}
+
+func (pk *SlurpedHostKey) String() string {
+	armor := base64.StdEncoding.EncodeToString(serializePublickey(pk.Key))
+	return fmt.Sprintf("%s %s", algoName(pk.Key), armor)
+}
+
+func (pk *SlurpedHostKey) Fingerprint() string {
+	h := md5.New()
+	h.Write(serializePublickey(pk.Key))
+	fp := h.Sum(nil)
+	result := bytes.NewBuffer([]byte{})
+	for i := 0; i < len(fp); i++ {
+		if i > 0 {
+			result.WriteByte(byte(':'))
+		}
+		io.WriteString(result, fmt.Sprintf("%02x", fp[i]))
+	}
+	return string(result.Bytes())
 }
