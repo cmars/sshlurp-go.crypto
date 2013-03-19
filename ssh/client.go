@@ -113,11 +113,11 @@ func (c *ClientConn) handshake() error {
 	case kexAlgoDH14SHA1:
 		hashFunc = crypto.SHA1
 		dhGroup14Once.Do(initDHGroup14)
-		H, K, err = c.kexDH(dhGroup14, hashFunc, &magics, hostKeyAlgo)
+		H, K, _, err = c.kexDH(dhGroup14, hashFunc, &magics, hostKeyAlgo)
 	case keyAlgoDH1SHA1:
 		hashFunc = crypto.SHA1
 		dhGroup1Once.Do(initDHGroup1)
-		H, K, err = c.kexDH(dhGroup1, hashFunc, &magics, hostKeyAlgo)
+		H, K, _, err = c.kexDH(dhGroup1, hashFunc, &magics, hostKeyAlgo)
 	default:
 		err = fmt.Errorf("ssh: unexpected key exchange algorithm %v", kexAlgo)
 	}
@@ -145,32 +145,32 @@ func (c *ClientConn) handshake() error {
 
 // kexDH performs Diffie-Hellman key agreement on a ClientConn. The
 // returned values are given the same names as in RFC 4253, section 8.
-func (c *ClientConn) kexDH(group *dhGroup, hashFunc crypto.Hash, magics *handshakeMagics, hostKeyAlgo string) ([]byte, []byte, error) {
+func (c *ClientConn) kexDH(group *dhGroup, hashFunc crypto.Hash, magics *handshakeMagics, hostKeyAlgo string) ([]byte, []byte, []byte, error) {
 	x, err := rand.Int(c.config.rand(), group.p)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	X := new(big.Int).Exp(group.g, x, group.p)
 	kexDHInit := kexDHInitMsg{
 		X: X,
 	}
 	if err := c.writePacket(marshal(msgKexDHInit, kexDHInit)); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	packet, err := c.readPacket()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	var kexDHReply kexDHReplyMsg
 	if err = unmarshal(&kexDHReply, packet, msgKexDHReply); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	kInt, err := group.diffieHellman(kexDHReply.Y, x)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	h := hashFunc.New()
@@ -187,7 +187,7 @@ func (c *ClientConn) kexDH(group *dhGroup, hashFunc crypto.Hash, magics *handsha
 
 	H := h.Sum(nil)
 
-	return H, K, nil
+	return H, K, kexDHReply.HostKey, nil
 }
 
 // mainLoop reads incoming messages and routes channel messages
